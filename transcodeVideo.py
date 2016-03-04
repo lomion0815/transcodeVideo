@@ -45,17 +45,25 @@ FFPROBE_PATH = 'D:\\tmp\\ffprobe.exe'
 # encoding script
 #-------------------------------------------------------------------------------
 
-def encode(input,output,start=None,duration=None,volume=None):
+def encode(input,output,start=None,duration=None,volume=None,resolution=None):
     try:
-        command = [
-            FFMPEG_PATH, '-i', input,
-            '-y', '-c:v', 'libx264', '-preset', PRESET, '-profile:v', PROFILE, '-crf', CRF,
-        ]
+        command = [FFMPEG_PATH]
+        if start is not None:
+            command += [ '-ss', start]
+        
+        command += [ '-i', input,
+            '-y', '-c:v', 'libx264', '-preset', PRESET, '-profile:v', PROFILE, '-crf', CRF,]
+        
+        if duration is not None:
+            command += [ '-t', duration]
+        
+        # Create filter string
+        filters = ['yadif']
+        if (resolution == None) or (sorted(resolution)[0] > 720):
+            filters += ['scale=720*dar:720']
+        command += ["-vf",','.join(filters)]
 
-        filters = "yadif,scale=720*dar:720"
-        command += ["-vf",filters]
-
-        command += ['-c:a', 'libmp3lame']
+        command += ['-c:a', 'libmp3lame', '-b:a', '128k', '-ac', '2']
         command += [output]
         print(command)
         subprocess.call(command)                # encode the video!
@@ -90,13 +98,14 @@ if __name__ == "__main__":
     except:
         volume=None
         
-    #getting resolution
+    # getting resolution
     try:
         match=re.search("(\\d{3,4})x(\\d{3,4})",probe)
-        resolution=match.group(1,2)
+        groups=match.group(1,2)
+        resolution=[int(x) for x in groups]
     except:
         resolution=None
-    
-    encode(input,output)
+
+    encode(input,output,resolution=resolution)
     
 
