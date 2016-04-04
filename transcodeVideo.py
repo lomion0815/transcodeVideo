@@ -23,6 +23,8 @@ import sys
 import argparse
 import re
 import xml.etree.ElementTree as ET
+import tkinter as tk
+from tkinter import filedialog
 
 #-------------------------------------------------------------------------------
 # CONFIGURABLE SETTINGS
@@ -122,21 +124,29 @@ if __name__ == "__main__":
     summary="Summary:\n"
     # Parsing arguments
     parser = argparse.ArgumentParser(description='Encode a video')
-    parser.add_argument('input', help='xml-file describing input file')
-    parser.add_argument('output', help='output video file')
+    parser.add_argument('-i', help='xml-file describing input file')
+    parser.add_argument('-o', help='output video file')
     parser.add_argument('--device', help='XML file specifying device settings')
     args = parser.parse_args()
     
+    root = tk.Tk()
+    root.withdraw()
+
+    if args.i:
+        xmlFile = args.i
+    else:
+        xmlFile = filedialog.askopenfilename(title='Input file (xml)',filetypes=[('xml files', '.xml')])
     try:
-        xml = ET.ElementTree(file=args.input)
+        xml = ET.ElementTree(file=xmlFile)
     except FileNotFoundError:
         print ("File",args.input,"not found")
         sys.exit(1)
-    #except:
-        #print ("Error opening file File",args.input)
-        #sys.exit(1)       
-            
-    
+
+    if args.i:
+        output = args.o
+    else:
+        output = filedialog.asksaveasfilename(title='output video file',filetypes=[('MKV files', '.mkv'), ('MP4 files', '.mp4'), ('MPG files', '.mpg')])
+        
     path = xml.find('path').text
     basename = xml.find('basename').text
     uncutlist_xml = xml.find('uncutlist')
@@ -153,7 +163,6 @@ if __name__ == "__main__":
             stop = None        
 
     input = os.path.join(path,basename)
-    output = args.output
     summary+="Input: "+input+"\n"
     summary+="Output: "+output+"\n"
     print(input, output)
