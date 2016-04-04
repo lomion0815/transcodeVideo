@@ -54,9 +54,11 @@ if __name__ == "__main__":
     ET.SubElement(xml,'basename').text = os.path.basename(filename)
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
-    xmlTree.write(xmlFilename,'UTF-8')
+    # xmlTree.write(xmlFilename,'UTF-8')
+    pretty_string = etree.tostring(root, pretty_print=True)
+    outfile = open(xmlFilename, "w", encoding="utf-8")
+    outfile.write(pretty_string)
     
-
     
     
     
