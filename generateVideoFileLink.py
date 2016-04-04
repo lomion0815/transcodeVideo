@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import xml.etree.ElementTree as ET
+import os
 import argparse
 from MythTV import MythDB, findfile
 
@@ -49,8 +50,8 @@ if __name__ == "__main__":
     
     
     xml = ET.Element('VideoFile')
-    ET.SubElement(xml,'path').text = os.path.basename(filename)
-    ET.SubElement(xml,'basename').text = os.path.dirname(filename)
+    ET.SubElement(xml,'path').text = os.path.dirname(filename)
+    ET.SubElement(xml,'basename').text = os.path.basename(filename)
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
     xmlTree.write(xmlFilename,'UTF-8')
