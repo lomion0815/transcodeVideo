@@ -52,6 +52,13 @@ if __name__ == "__main__":
     xml = ET.Element('VideoFile')
     ET.SubElement(xml,'path').text = os.path.dirname(filename)
     ET.SubElement(xml,'basename').text = os.path.basename(filename)
+    
+    uncutlist = ET.SubElement(xml,'uncutlist')
+    markup = rec.markup.getuncutlist()
+    for cut in range(0, len(markup)):
+        ET.SubElement(uncutlist,'cut').text = markup[cut][0]
+        ET.SubElement(uncutlist,'cut').text = markup[cut][1]
+    
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
     # xmlTree.write(xmlFilename,'UTF-8')
