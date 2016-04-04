@@ -50,7 +50,25 @@ TEMPDIR = 'tmp'
 # encoding script
 #-------------------------------------------------------------------------------
 
-def encode(input,output,start=None,duration=None,volume=None,resolution=None):
+def encode(input,output,start=None,duration=None,volume=None,resolution=None,device='default.xml'):
+    if device == None:
+        device='default.xml'
+    try:
+        xml = ET.ElementTree(file=device)
+    except FileNotFoundError:
+        print ("File",device,"not found")
+        sys.exit(1)
+    video = xml.find('video')
+    crf = video.findtext('crf',default=CRF)
+    profile = video.findtext('profile',default=PROFILE)
+    vcodec = video.findtext('codec',default='libx264')
+    lines = int(video.findtext('lines',default='720'))
+    
+    audio = xml.find('audio')
+    acodec = audio.findtext('codec',default='libmp3lame')    
+    abitrate = audio.findtext('bitrate',default='192k')
+    channels = int(audio.findtext('channels',default='2'))
+     
     try:
         command = [FFMPEG_PATH]
 
@@ -64,15 +82,16 @@ def encode(input,output,start=None,duration=None,volume=None,resolution=None):
             command += [ '-t', str(duration)]
         
         # Video codec
-        command += [ '-y', '-c:v', 'libx264', '-preset', PRESET, '-profile:v', PROFILE, '-crf', CRF]
+        command += [ '-y', '-c:v', vcodec, '-preset', PRESET, '-profile:v', profile, '-crf', crf]
         
         # Create filter string
         filters = ['yadif']
-        if (resolution == None) or (sorted(resolution)[0] > 720):
-            filters += ['scale=720*dar:720']
+        if (resolution == None) or (sorted(resolution)[0] > lines):
+            scaleFilter = 'scale='+str(lines)+'*dar:'+str(lines)
+            filters += [scaleFilter]
         command += ["-vf",','.join(filters)]
 
-        command += ['-c:a', 'libmp3lame', '-b:a', '128k', '-ac', '2']
+        command += ['-c:a', acodec, '-b:a', abitrate, '-ac', str(channels)]
         command += [output]
         print(command)
         subprocess.call(command)                # encode the video!
@@ -94,9 +113,10 @@ def encodeCopyConcat(output):
         
 if __name__ == "__main__":
     # Parsing arguments
-    parser = argparse.ArgumentParser(description='Encode a video for Samsung Galaxy S5 Mini.')
+    parser = argparse.ArgumentParser(description='Encode a video')
     parser.add_argument('input', help='xml-file describing input file')
     parser.add_argument('output', help='output video file')
+    parser.add_argument('--device', help='XML file specifying device settings')
     args = parser.parse_args()
     
     try:
@@ -148,7 +168,7 @@ if __name__ == "__main__":
     except:
         resolution=None
     if len(uncutlist) == 0:
-        encode(input,output,resolution=resolution)
+        encode(input,output,resolution=resolution,device=args.device)
     else:
         concat_file = open(os.path.join(TEMPDIR,"concat.txt"), "w", encoding="utf-8")
         for x in range(len(uncutlist)):
@@ -160,7 +180,7 @@ if __name__ == "__main__":
                 length = None
             else:
                 length = int(uncutlist[x][1]) - int(uncutlist[x][0])
-            encode(input,tempname,resolution=resolution,start=uncutlist[x][0],duration=length)
+            encode(input,tempname,resolution=resolution,start=uncutlist[x][0],duration=length,device=args.device)
         concat_file.close()
         encodeCopyConcat(output)
         

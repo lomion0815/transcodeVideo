@@ -1,0 +1,14 @@
+<DeviceSettings>
+    <device>Galaxy S5 Mini</device>
+    <video>
+        <crf>21</crf>
+        <profile>baseline</profile>
+        <codec>libx264</codec>
+        <lines>720</lines>
+    </video>
+    <audio>
+        <codec>libmp3lame</codec>
+        <channels>2</channels>
+        <bitrate>128k</bitrate>
+    </audio>
+</DeviceSettings>
