@@ -86,12 +86,19 @@ def encode(input,output,start=None,duration=None,volume=None,resolution=None,dev
         
         # Create filter string
         filters = ['yadif']
-        if (resolution == None) or (sorted(resolution)[0] > lines):
+        if (resolution == None) or (resolution[1] > lines):
             scaleFilter = 'scale='+str(lines)+'*dar:'+str(lines)
             filters += [scaleFilter]
         command += ["-vf",','.join(filters)]
 
         command += ['-c:a', acodec, '-b:a', abitrate, '-ac', str(channels)]
+      
+        # Create filter string
+        if volume:
+            volume = volume * -1 
+            filters = ['volume='+str(volume)+'dB']
+            command += ["-af",','.join(filters)]
+        
         command += [output]
         print(command)
         subprocess.call(command)                # encode the video!
@@ -112,6 +119,7 @@ def encodeCopyConcat(output):
         print("Error encoding:",input)
         
 if __name__ == "__main__":
+    summary="Summary:\n"
     # Parsing arguments
     parser = argparse.ArgumentParser(description='Encode a video')
     parser.add_argument('input', help='xml-file describing input file')
@@ -146,29 +154,39 @@ if __name__ == "__main__":
 
     input = os.path.join(path,basename)
     output = args.output
+    summary+="Input: "+input+"\n"
+    summary+="Output: "+output+"\n"
     print(input, output)
 
     # Probing input file
-    command= [FFMPEG_PATH, '-i', input, '-vn', '-sn', '-af', 'volumedetect', '-f', 'null', '/dev/null']
+    command= [FFMPEG_PATH, '-i', input]
+    if start is not None:
+        command += [ '-ss', str(start)]
+        if stop is not None:
+            command += [ '-t', str(stop-start)]
+    command += [ '-vn', '-sn', '-af', 'volumedetect', '-f', 'null', '/dev/null']
     result=subprocess.run(command,stderr=subprocess.PIPE)
     probe=result.stderr.decode("utf-8") 
+
     # getting max volume
     try:
         match=re.findall("max_volume: (.*) dB",probe)
         volume=[float(x) for x in match]
         volume.sort()
+        summary+="Volume: "+str(volume[0])+"\n"
     except:
         volume=None
-        
+
     # getting resolution
-    try:
-        match=re.search("(\\d{3,4})x(\\d{3,4})",probe)
-        groups=match.group(1,2)
-        resolution=[int(x) for x in groups]
-    except:
+    match=re.search("(\d{3,4})x(\d{3,4})",probe)
+    if match:
+        resolution=[int(match.group(1)),int(match.group(2))]
+        summary+="Resolution: "+match.group(0)+"\n"
+    else:
         resolution=None
+
     if len(uncutlist) == 0:
-        encode(input,output,resolution=resolution,device=args.device)
+        encode(input,output,resolution=resolution,device=args.device,volume=volume[0])
     else:
         concat_file = open(os.path.join(TEMPDIR,"concat.txt"), "w", encoding="utf-8")
         for x in range(len(uncutlist)):
@@ -180,9 +198,10 @@ if __name__ == "__main__":
                 length = None
             else:
                 length = int(uncutlist[x][1]) - int(uncutlist[x][0])
-            encode(input,tempname,resolution=resolution,start=uncutlist[x][0],duration=length,device=args.device)
+            encode(input,tempname,resolution=resolution,start=uncutlist[x][0],duration=length,device=args.device,volume=volume[0])
         concat_file.close()
-        encodeCopyConcat(output)
-        
+        encodeCopyConcat(output) 
+        print(summary)
+        print(resolution[1])
     
 
