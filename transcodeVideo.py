@@ -23,8 +23,10 @@ import sys
 import argparse
 import re
 import xml.etree.ElementTree as ET
-import tkinter as tk
+import tkinter
+from tkinter import *
 from tkinter import filedialog
+from tkinter import ttk
 
 #-------------------------------------------------------------------------------
 # CONFIGURABLE SETTINGS
@@ -119,72 +121,179 @@ def encodeCopyConcat(output):
         subprocess.call(command)                # encode the video!
     except:
         print("Error encoding:",input)
+
+class videoFile():
+    def __init__(self):
+        self.xmlFile = StringVar()
+        self.probe = None
+
+    def parseXmlFile(self):
+        try:
+            xml = ET.ElementTree(file=self.xmlFile.get())
+        except FileNotFoundError:
+            print ("File",self.xmlFile.get(),"not found")
+            sys.exit(1)
+        path = xml.find('path').text
+        basename = xml.find('basename').text
+        uncutlist_xml = xml.find('uncutlist')
+        startstoplist = list(uncutlist_xml.iter())
+        self.uncutlist = []
+        self.start = startstoplist[1].text
+        self.stop = None
+        for x in range(1,len(startstoplist),2):
+            if x+1 < len(startstoplist):
+                self.uncutlist.append([startstoplist[x].text,startstoplist[x+1].text])
+                self.stop = startstoplist[x+1].text
+            else:
+                self.uncutlist.append([startstoplist[x].text,None])
+                self.stop = None        
+
+        self.input = os.path.join(path,basename)
+
+    def setXmlFile(self, val):
+        self.xmlFile.set(val)
+        self.parseXmlFile()
+
+    def probeInputFile(self):
+        if self.probe == None:
+            command= [FFMPEG_PATH, '-i', self.input]
+            if self.start is not None:
+                command += [ '-ss', str(self.start)]
+            if self.stop is not None:
+                command += [ '-t', str(self.stop-self.start)]
+            command += [ '-vn', '-sn', '-af', 'volumedetect', '-f', 'null', '/dev/null']
+            result=subprocess.run(command,stderr=subprocess.PIPE)
+            self.probe=result.stderr.decode("utf-8") 
+
+    def getVolume(self):
+        self.probeInputFile()
+        try:
+            match=re.findall("max_volume: (.*) dB",self.probe)
+            volume=[float(x) for x in match]
+            volume.sort()
+        except:
+            volume=None
+        self.volume = volume[0]
+        return self.volume
+
+    def setVolume(self, val):
+        self.volume = float(val)
+        print("Set volume to",val)
+
+    def encode(self, val):
+        output = val.get()
+        if len(self.uncutlist) == 0:
+            encode(self.input,output,resolution=None,volume=self.volume)
+        else:
+            concat_file = open(os.path.join(TEMPDIR,"concat.txt"), "w", encoding="utf-8")
+            for x in range(len(self.uncutlist)):
+                tempname = "temp_"+str(x)+".mkv"
+                tempname = os.path.join(TEMPDIR, tempname)
+                concat_string="file '"+tempname+"'\n"
+                concat_file.write(concat_string)
+                if self.uncutlist[x][1] == None:
+                    length = None
+                else:
+                    length = int(self.uncutlist[x][1]) - int(self.uncutlist[x][0])
+                encode(self.input,tempname,resolution=None,start=self.uncutlist[x][0],duration=length,volume=self.volume)
+            concat_file.close()
+            encodeCopyConcat(output)
         
+class mainWindow(tkinter.Tk):
+    def __init__(self,parent):
+        tkinter.Tk.__init__(self,parent)
+        self.parent = parent 
+        self.initialize()
+        
+    def browseXmlFile(self):
+        self.setXmlFile(filedialog.askopenfilename(title='Input file (xml)',filetypes=[('xml files', '.xml')]))
+    
+    def setXmlFile(self, val):
+        self.xmlFile.set(val)
+        self.videoFile = videoFile()
+        self.videoFile.setXmlFile(val)
+        
+    def browseOutputFile(self):
+        self.output.set(filedialog.asksaveasfilename(title='output video file',filetypes=[('MKV files', '.mkv'), ('MP4 files', '.mp4'), ('MPG files', '.mpg')]))
+
+    def setOutputFile(self, val):
+        self.output.set(val)
+
+    def calculateVolume(self):
+        self.volume.set(self.videoFile.getVolume())
+
+    def setVolume(self, val):
+        self.volume.set(val)
+        self.videoFile.setVolume(val)
+
+    def encode(self):
+        try:
+            if float(self.volume.get()) < 0:
+                self.videoFile.setVolume(float(self.volume.get()))
+            else:
+                self.videoFile.setVolume(0)
+        except:
+            self.videoFile.setVolume(0)
+        self.videoFile.encode(self.output)        
+        
+    def initialize(self):
+        self.sytle = ttk.Style()
+        frame = ttk.Frame(self,padding="3 3 12 12")
+        frame.grid(column=0, row=0, sticky=(N, W, E, S))
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+        
+        self.videoFile = videoFile()
+
+        self.xmlFile = StringVar()
+        ttk.Label(frame, text="Input XML file:").grid(column=1, row=1, sticky=(E))
+        ttk.Label(frame, textvariable=self.xmlFile).grid(column=2, row=1, sticky=(W, E))
+        ttk.Button(frame, text="Browse", command=self.browseXmlFile).grid(column=3, row=1, sticky=W)
+
+        self.output = StringVar()
+        ttk.Label(frame, text="Output video file:").grid(column=1, row=2, sticky=(E))
+        ttk.Label(frame, textvariable=self.output).grid(column=2, row=2, sticky=(W, E))
+        ttk.Button(frame, text="Browse", command=self.browseOutputFile).grid(column=3, row=2, sticky=W)
+        
+        self.device = StringVar()
+        self.device.set('Galaxy S5 Mini')
+        ttk.Label(frame, text="Device:").grid(column=1, row=3, sticky=(E))
+        ttk.Combobox(frame, textvariable=self.device, values=['Galaxy S5 Mini']).grid(column=2, row=3, sticky=(W))
+        
+        self.volume = StringVar()
+        ttk.Label(frame, text="Volume (dB):").grid(column=1, row=4, sticky=(E))
+        volumeEntry = ttk.Entry(frame, textvariable=self.volume).grid(column=2, row=4, sticky=(W, E))
+        ttk.Button(frame, text="Calculate", command=self.calculateVolume).grid(column=3, row=4, sticky=W)
+        
+        ttk.Button(frame, text="Encode", command=self.encode).grid(column=2, row=6)
+        
+     
 if __name__ == "__main__":
     summary="Summary:\n"
     # Parsing arguments
     parser = argparse.ArgumentParser(description='Encode a video')
     parser.add_argument('-i', help='xml-file describing input file')
     parser.add_argument('-o', help='output video file')
-    parser.add_argument('--device', help='XML file specifying device settings')
+    #parser.add_argument('--device', help='XML file specifying device settings')
     args = parser.parse_args()
-    
-    root = tk.Tk()
-    root.withdraw()
-
+ 
+    app = mainWindow(None)
+    app.title("Transcode Video")
+ 
+    print(args.i)
     if args.i:
-        xmlFile = args.i
+        app.setXmlFile(args.i)
     else:
-        xmlFile = filedialog.askopenfilename(title='Input file (xml)',filetypes=[('xml files', '.xml')])
-    try:
-        xml = ET.ElementTree(file=xmlFile)
-    except FileNotFoundError:
-        print ("File",args.input,"not found")
-        sys.exit(1)
-
-    if args.i:
-        output = args.o
-    else:
-        output = filedialog.asksaveasfilename(title='output video file',filetypes=[('MKV files', '.mkv'), ('MP4 files', '.mp4'), ('MPG files', '.mpg')])
+        app.browseXmlFile()
         
-    path = xml.find('path').text
-    basename = xml.find('basename').text
-    uncutlist_xml = xml.find('uncutlist')
-    startstoplist = list(uncutlist_xml.iter())
-    uncutlist = []
-    start = startstoplist[1].text
-    stop = None
-    for x in range(1,len(startstoplist),2):
-        if x+1 < len(startstoplist):
-            uncutlist.append([startstoplist[x].text,startstoplist[x+1].text])
-            stop = startstoplist[x+1].text
-        else:
-            uncutlist.append([startstoplist[x].text,None])
-            stop = None        
-
-    input = os.path.join(path,basename)
-    summary+="Input: "+input+"\n"
-    summary+="Output: "+output+"\n"
-    print(input, output)
-
-    # Probing input file
-    command= [FFMPEG_PATH, '-i', input]
-    if start is not None:
-        command += [ '-ss', str(start)]
-        if stop is not None:
-            command += [ '-t', str(stop-start)]
-    command += [ '-vn', '-sn', '-af', 'volumedetect', '-f', 'null', '/dev/null']
-    result=subprocess.run(command,stderr=subprocess.PIPE)
-    probe=result.stderr.decode("utf-8") 
-
-    # getting max volume
-    try:
-        match=re.findall("max_volume: (.*) dB",probe)
-        volume=[float(x) for x in match]
-        volume.sort()
-        summary+="Volume: "+str(volume[0])+"\n"
-    except:
-        volume=None
+    if args.o:
+        app.setOutputFile(args.o)
+    else:
+        app.browseOutputFile()
+          
+    app.mainloop()
+    
+    sys.exit(1)
 
     # getting resolution
     match=re.search("(\d{3,4})x(\d{3,4})",probe)
@@ -194,23 +303,5 @@ if __name__ == "__main__":
     else:
         resolution=None
 
-    if len(uncutlist) == 0:
-        encode(input,output,resolution=resolution,device=args.device,volume=volume[0])
-    else:
-        concat_file = open(os.path.join(TEMPDIR,"concat.txt"), "w", encoding="utf-8")
-        for x in range(len(uncutlist)):
-            tempname = "temp_"+str(x)+".mkv"
-            tempname = os.path.join(TEMPDIR, tempname)
-            concat_string="file '"+tempname+"'\n"
-            concat_file.write(concat_string)
-            if uncutlist[x][1] == None:
-                length = None
-            else:
-                length = int(uncutlist[x][1]) - int(uncutlist[x][0])
-            encode(input,tempname,resolution=resolution,start=uncutlist[x][0],duration=length,device=args.device,volume=volume[0])
-        concat_file.close()
-        encodeCopyConcat(output) 
-        print(summary)
-        print(resolution[1])
     
 
