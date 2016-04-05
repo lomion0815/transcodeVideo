@@ -53,11 +53,18 @@ if __name__ == "__main__":
     ET.SubElement(xml,'path').text = os.path.dirname(filename)
     ET.SubElement(xml,'basename').text = os.path.basename(filename)
     
+    # estimate framerate
+    rate = rec.seek[-1].mark/float((rec.endtime-rec.starttime).seconds)
+    rates = [24000./1001.,25,30000./1001.,50,60000./1001.]
+    diff = [abs(f-rate) for f in rates]
+    rate = rates[diff.index(min(diff))]
+    print("Framerate:",rate)
+    
     uncutlist = ET.SubElement(xml,'uncutlist')
     markup = rec.markup.getuncutlist()
     for cut in range(0, len(markup)):
-        ET.SubElement(uncutlist,'cut').text = markup[cut][0]
-        ET.SubElement(uncutlist,'cut').text = markup[cut][1]
+        ET.SubElement(uncutlist,'cut').text = markup[cut][0]/rate
+        ET.SubElement(uncutlist,'cut').text = markup[cut][1]/rate
     
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
