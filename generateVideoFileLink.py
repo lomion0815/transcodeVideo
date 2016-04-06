@@ -33,7 +33,6 @@ def gen_link(rec, dest):
     source = os.path.join(sg.dirname, rec.basename)
     destination = os.path.join(dest, rec.basename)
     destination = destination.replace(' ','_')
-    print(source, destination)
     try:
         os.symlink(source, destination)
     except OSError:
@@ -54,7 +53,6 @@ if __name__ == "__main__":
     else:
         dest = args.destination
 
-#    rec = Recorded(data=[chanid, starttime])
     rec = Recorded(args.findid)
     filename = gen_link(rec, dest)
     
@@ -68,7 +66,6 @@ if __name__ == "__main__":
     rates = [24000./1001.,25,30000./1001.,50,60000./1001.]
     diff = [abs(f-rate) for f in rates]
     rate = rates[diff.index(min(diff))]
-    print("Framerate:",rate)
     
     uncutlist = ET.SubElement(xml,'uncutlist')
     markup = rec.markup.getuncutlist()
@@ -79,9 +76,6 @@ if __name__ == "__main__":
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
     xmlTree.write(xmlFilename,'UTF-8')
-    #pretty_string = ET.tostring(xmlTree, pretty_print=True)
-    #outfile = open(xmlFilename, "w", encoding="utf-8")
-    #outfile.write(pretty_string)
     sys.exit(0)    
     
     
