@@ -134,8 +134,7 @@ class videoFile():
         except FileNotFoundError:
             print ("File",self.xmlFile.get(),"not found")
             sys.exit(1)
-        if self.path == None:
-            self.path = xml.find('path').text
+        self.xmlPath = xml.find('path').text
         self.basename = xml.find('basename').text
         uncutlist_xml = xml.find('uncutlist')
         startstoplist = list(uncutlist_xml.iter())
@@ -170,6 +169,9 @@ class videoFile():
 
     def getSourcePath(self):
         return self.path
+
+    def getXmlPath(self):
+        return self.xmlPath
 
     def probeInputFile(self):
         if self.probe == None:
@@ -239,6 +241,9 @@ class mainWindow(tkinter.Tk):
         self.videoFile.setSourcePath(val)
         self.sourcePath.set(val)
 
+    def sourcePathFromXml(self):
+        self.sourcePath.set(self.videoFile.getXmlPath())
+
     def browseOutputFile(self):
         self.output.set(filedialog.asksaveasfilename(title='output video file',filetypes=[('MKV files', '.mkv'), ('MP4 files', '.mp4'), ('MPG files', '.mpg')]))
 
@@ -277,9 +282,11 @@ class mainWindow(tkinter.Tk):
         ttk.Button(frame, text="Browse", command=self.browseXmlFile).grid(column=3, row=1, sticky=W)
 
         self.sourcePath = StringVar()
+        self.setSourcePath("input")
         ttk.Label(frame, text="Path to input video files:").grid(column=1, row=2, sticky=(E))
         ttk.Label(frame, textvariable=self.sourcePath).grid(column=2, row=2, sticky=(W, E))
-        ttk.Button(frame, text="Browse", command=self.browseSourcePath).grid(column=3, row=2, sticky=W)
+        ttk.Button(frame, text="Browse", command=self.browseSourcePath).grid(column=3, row=2, sticky=(W, E))
+        ttk.Button(frame, text="From XML", command=self.sourcePathFromXml).grid(column=4, row=2, sticky=W)
         
         self.basename = StringVar()
         ttk.Label(frame, text="Basename:").grid(column=1, row=3, sticky=(E))
@@ -329,7 +336,9 @@ if __name__ == "__main__":
         app.browseOutputFile()
 
     if args.path:
-        app.setOverwritePath(args.path)
+        app.setSourcePath(args.path)
+    else:
+        app.setSourcePath(os.getcwd())
     
     app.mainloop()
     
