@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 This python Generate XML file from Mythtv jobqueue 
 
@@ -19,33 +20,42 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import xml.etree.ElementTree as ET
 import os
+import sys
 import argparse
-from MythTV import MythDB, findfile
-
+from MythTV import MythDB, findfile, Recorded
+from  MythTV.dataheap import Recorded
+#from  MythTV.system import System
+#from  MythTV.logging import MythLog
+from  MythTV.mythproto import findfile
 # Taken from https://github.com/wagnerrp/mythtv-scripts/blob/master/python/mythlink.py
 def gen_link(rec, dest):
     sg = findfile(rec.basename, rec.storagegroup, rec._db)
     source = os.path.join(sg.dirname, rec.basename)
-    destination = os.path.join(dest, rec.formatPath(format))
+    destination = os.path.join(dest, rec.basename)
     destination = destination.replace(' ','_')
-    os.symlink(source, destination)
+    print(source, destination)
+    try:
+        os.symlink(source, destination)
+    except OSError:
+        pass
     return destination
 
 if __name__ == "__main__":
     # Parsing arguments
     parser = argparse.ArgumentParser(description='Generate XML file from Mythtv jobqueue.')
-    parser.add_argument('chanid', help='Mythtv channel id of a recording')
-    parser.add_argument('starttime', help='Mythtv start time (UTC) of a recording')
+    parser.add_argument('findid', help='FINDID parameter from Mythtv Backend')
+#    parser.add_argument('chanid', help='Mythtv channel id of a recording')
+#    parser.add_argument('recordedid', help='xxxMythtv start time (UTC) of a recording')
+#    parser.add_argument('starttime', help='Mythtv start time (UTC) of a recording')
     parser.add_argument("-o",'--destination', help='Destination path (/data_2/transcode/output if not set)')
     args = parser.parse_args()
-    chanid = args.chanid
-    starttime = args.starttime
     if args.destination is None:
         dest = "/data_2/transcode/output"
-    else
+    else:
         dest = args.destination
 
-    rec = Recorded((chanid, starttime))
+#    rec = Recorded(data=[chanid, starttime])
+    rec = Recorded(args.findid)
     filename = gen_link(rec, dest)
     
     
@@ -54,7 +64,7 @@ if __name__ == "__main__":
     ET.SubElement(xml,'basename').text = os.path.basename(filename)
     
     # estimate framerate
-    rate = rec.seek[-1].mark/float((rec.endtime-rec.starttime).seconds)
+    rate = float(rec.seek[-1].mark)/float((rec.endtime-rec.starttime).seconds)
     rates = [24000./1001.,25,30000./1001.,50,60000./1001.]
     diff = [abs(f-rate) for f in rates]
     rate = rates[diff.index(min(diff))]
@@ -63,16 +73,16 @@ if __name__ == "__main__":
     uncutlist = ET.SubElement(xml,'uncutlist')
     markup = rec.markup.getuncutlist()
     for cut in range(0, len(markup)):
-        ET.SubElement(uncutlist,'cut').text = markup[cut][0]/rate
-        ET.SubElement(uncutlist,'cut').text = markup[cut][1]/rate
+        ET.SubElement(uncutlist,'cut').text = str(markup[cut][0]/rate)
+        ET.SubElement(uncutlist,'cut').text = str(markup[cut][1]/rate)
     
     xmlTree=ET.ElementTree(xml)
     xmlFilename = os.path.basename(filename)+".xml"
-    # xmlTree.write(xmlFilename,'UTF-8')
-    pretty_string = etree.tostring(root, pretty_print=True)
-    outfile = open(xmlFilename, "w", encoding="utf-8")
-    outfile.write(pretty_string)
-    
+    xmlTree.write(xmlFilename,'UTF-8')
+    #pretty_string = ET.tostring(xmlTree, pretty_print=True)
+    #outfile = open(xmlFilename, "w", encoding="utf-8")
+    #outfile.write(pretty_string)
+    sys.exit(0)    
     
     
     
