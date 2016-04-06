@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 This python script encodes a video for Samsung Galaxy S5 Mini 
 
@@ -99,7 +100,6 @@ def encode(input,output,start=None,duration=None,volume=None,resolution=None,dev
       
         # Create filter string
         if volume:
-            volume = volume * -1 
             filters = ['volume='+str(volume)+'dB']
             command += ["-af",','.join(filters)]
         
@@ -126,6 +126,7 @@ class videoFile():
     def __init__(self):
         self.xmlFile = StringVar()
         self.probe = None
+        self.path = None
 
     def parseXmlFile(self):
         try:
@@ -133,8 +134,9 @@ class videoFile():
         except FileNotFoundError:
             print ("File",self.xmlFile.get(),"not found")
             sys.exit(1)
-        path = xml.find('path').text
-        basename = xml.find('basename').text
+        if self.path == None:
+            self.path = xml.find('path').text
+        self.basename = xml.find('basename').text
         uncutlist_xml = xml.find('uncutlist')
         startstoplist = list(uncutlist_xml.iter())
         self.uncutlist = []
@@ -147,20 +149,35 @@ class videoFile():
             else:
                 self.uncutlist.append([startstoplist[x].text,None])
                 self.stop = None        
-
-        self.input = os.path.join(path,basename)
+        self.probe = None
+        #self.input = os.path.join(path,basename)
 
     def setXmlFile(self, val):
         self.xmlFile.set(val)
         self.parseXmlFile()
 
+    def setSourcePath(self, val):
+        self.path=val
+        self.probe = None
+
+    def getBasename(self):
+        return self.basename
+
+    def setBasename(self, val):
+        if self.basename != val:
+            self.probe = None
+            self.basename=val
+
+    def getSourcePath(self):
+        return self.path
+
     def probeInputFile(self):
         if self.probe == None:
-            command= [FFMPEG_PATH, '-i', self.input]
+            command= [FFMPEG_PATH, '-i', os.path.join(self.path,self.basename)]
             if self.start is not None:
-                command += [ '-ss', str(self.start)]
-            if self.stop is not None:
-                command += [ '-t', str(self.stop-self.start)]
+                command += [ '-ss', self.start]
+                if self.stop is not None:
+                    command += [ '-t', str(float(self.stop)-float(self.start))]
             command += [ '-vn', '-sn', '-af', 'volumedetect', '-f', 'null', '/dev/null']
             result=subprocess.run(command,stderr=subprocess.PIPE)
             self.probe=result.stderr.decode("utf-8") 
@@ -173,7 +190,7 @@ class videoFile():
             volume.sort()
         except:
             volume=None
-        self.volume = volume[0]
+        self.volume = volume[0] * -1
         return self.volume
 
     def setVolume(self, val):
@@ -183,7 +200,7 @@ class videoFile():
     def encode(self, val):
         output = val.get()
         if len(self.uncutlist) == 0:
-            encode(self.input,output,resolution=None,volume=self.volume)
+            encode(os.path.join(self.path,self.basename),output,resolution=None,volume=self.volume)
         else:
             concat_file = open(os.path.join(TEMPDIR,"concat.txt"), "w", encoding="utf-8")
             for x in range(len(self.uncutlist)):
@@ -194,8 +211,8 @@ class videoFile():
                 if self.uncutlist[x][1] == None:
                     length = None
                 else:
-                    length = int(self.uncutlist[x][1]) - int(self.uncutlist[x][0])
-                encode(self.input,tempname,resolution=None,start=self.uncutlist[x][0],duration=length,volume=self.volume)
+                    length = float(self.uncutlist[x][1]) - float(self.uncutlist[x][0])
+                encode(os.path.join(self.path,self.basename),tempname,resolution=None,start=self.uncutlist[x][0],duration=length,volume=self.volume)
             concat_file.close()
             encodeCopyConcat(output)
         
@@ -212,7 +229,16 @@ class mainWindow(tkinter.Tk):
         self.xmlFile.set(val)
         self.videoFile = videoFile()
         self.videoFile.setXmlFile(val)
-        
+        self.sourcePath.set(self.videoFile.getSourcePath())
+        self.basename.set(self.videoFile.getBasename())
+
+    def browseSourcePath(self):
+        self.setSourcePath(filedialog.askdirectory(title='Path to input video files'))
+
+    def setSourcePath(self, val):
+        self.videoFile.setSourcePath(val)
+        self.sourcePath.set(val)
+
     def browseOutputFile(self):
         self.output.set(filedialog.asksaveasfilename(title='output video file',filetypes=[('MKV files', '.mkv'), ('MP4 files', '.mp4'), ('MPG files', '.mpg')]))
 
@@ -220,13 +246,13 @@ class mainWindow(tkinter.Tk):
         self.output.set(val)
 
     def calculateVolume(self):
+        self.videoFile.setBasename(self.basename.get())
+        if len(self.sourcePath.get()):
+            self.videoFile.setSourcePath(self.sourcePath.get())
         self.volume.set(self.videoFile.getVolume())
 
-    def setVolume(self, val):
-        self.volume.set(val)
-        self.videoFile.setVolume(val)
-
     def encode(self):
+        self.videoFile.setBasename(self.basename.get())
         try:
             if float(self.volume.get()) < 0:
                 self.videoFile.setVolume(float(self.volume.get()))
@@ -250,22 +276,32 @@ class mainWindow(tkinter.Tk):
         ttk.Label(frame, textvariable=self.xmlFile).grid(column=2, row=1, sticky=(W, E))
         ttk.Button(frame, text="Browse", command=self.browseXmlFile).grid(column=3, row=1, sticky=W)
 
+        self.sourcePath = StringVar()
+        ttk.Label(frame, text="Path to input video files:").grid(column=1, row=2, sticky=(E))
+        ttk.Label(frame, textvariable=self.sourcePath).grid(column=2, row=2, sticky=(W, E))
+        ttk.Button(frame, text="Browse", command=self.browseSourcePath).grid(column=3, row=2, sticky=W)
+        
+        self.basename = StringVar()
+        ttk.Label(frame, text="Basename:").grid(column=1, row=3, sticky=(E))
+        #ttk.Label(frame, textvariable=self.basename).grid(column=2, row=3, sticky=(W, E))
+        ttk.Entry(frame, textvariable=self.basename).grid(column=2, row=3, sticky=(W, E))
+        
         self.output = StringVar()
-        ttk.Label(frame, text="Output video file:").grid(column=1, row=2, sticky=(E))
-        ttk.Label(frame, textvariable=self.output).grid(column=2, row=2, sticky=(W, E))
-        ttk.Button(frame, text="Browse", command=self.browseOutputFile).grid(column=3, row=2, sticky=W)
+        ttk.Label(frame, text="Output video file:").grid(column=1, row=4, sticky=(E))
+        ttk.Label(frame, textvariable=self.output).grid(column=2, row=4, sticky=(W, E))
+        ttk.Button(frame, text="Browse", command=self.browseOutputFile).grid(column=3, row=4, sticky=W)
         
         self.device = StringVar()
         self.device.set('Galaxy S5 Mini')
-        ttk.Label(frame, text="Device:").grid(column=1, row=3, sticky=(E))
-        ttk.Combobox(frame, textvariable=self.device, values=['Galaxy S5 Mini']).grid(column=2, row=3, sticky=(W))
+        ttk.Label(frame, text="Device:").grid(column=1, row=5, sticky=(E))
+        ttk.Combobox(frame, textvariable=self.device, values=['Galaxy S5 Mini']).grid(column=2, row=5, sticky=(W))
         
         self.volume = StringVar()
-        ttk.Label(frame, text="Volume (dB):").grid(column=1, row=4, sticky=(E))
-        volumeEntry = ttk.Entry(frame, textvariable=self.volume).grid(column=2, row=4, sticky=(W, E))
-        ttk.Button(frame, text="Calculate", command=self.calculateVolume).grid(column=3, row=4, sticky=W)
+        ttk.Label(frame, text="Volume (dB):").grid(column=1, row=6, sticky=(E))
+        volumeEntry = ttk.Entry(frame, textvariable=self.volume).grid(column=2, row=6, sticky=(W, E))
+        ttk.Button(frame, text="Calculate", command=self.calculateVolume).grid(column=3, row=6, sticky=W)
         
-        ttk.Button(frame, text="Encode", command=self.encode).grid(column=2, row=6)
+        ttk.Button(frame, text="Encode", command=self.encode).grid(column=2, row=7)
         
      
 if __name__ == "__main__":
@@ -274,6 +310,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Encode a video')
     parser.add_argument('-i', help='xml-file describing input file')
     parser.add_argument('-o', help='output video file')
+    parser.add_argument('-path', help='overwrites path value in input file')
     #parser.add_argument('--device', help='XML file specifying device settings')
     args = parser.parse_args()
  
@@ -290,7 +327,10 @@ if __name__ == "__main__":
         app.setOutputFile(args.o)
     else:
         app.browseOutputFile()
-          
+
+    if args.path:
+        app.setOverwritePath(args.path)
+    
     app.mainloop()
     
     sys.exit(1)
