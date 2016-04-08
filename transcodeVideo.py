@@ -24,10 +24,12 @@ import sys
 import argparse
 import re
 import xml.etree.ElementTree as ET
+from multiprocessing import Process
 import tkinter
 from tkinter import *
 from tkinter import filedialog
 from tkinter import ttk
+import tkMessageBox
 
 #-------------------------------------------------------------------------------
 # CONFIGURABLE SETTINGS
@@ -105,7 +107,7 @@ def encode(input,output,start=None,duration=None,volume=None,resolution=None,dev
         
         command += [output]
         print(command)
-        subprocess.call(command)                # encode the video!
+        subprocess.Popen(command)                # encode the video!
     except:
         print("Error encoding:",input)
 #    finally:
@@ -127,6 +129,9 @@ class videoFile():
         self.xmlFile = StringVar()
         self.probe = None
         self.path = None
+
+    def inputExists(self):
+        return os.path.exists(os.path.join(self.path,self.basename))
 
     def parseXmlFile(self):
         try:
@@ -251,12 +256,16 @@ class mainWindow(tkinter.Tk):
         self.output.set(val)
 
     def calculateVolume(self):
+        if not self.videoFile.inputExists():
+            tkMessageBox.showerror("File not found!","Input file does not exists!")
         self.videoFile.setBasename(self.basename.get())
         if len(self.sourcePath.get()):
             self.videoFile.setSourcePath(self.sourcePath.get())
         self.volume.set(self.videoFile.getVolume())
 
     def encode(self):
+        if not self.videoFile.inputExists():
+            tkMessageBox.showerror("File not found!","Input file does not exists!")
         self.videoFile.setBasename(self.basename.get())
         try:
             if float(self.volume.get()) < 0:
